@@ -1,0 +1,52 @@
+#!/usr/bin/env sh
+
+set +e
+
+red_color='\033[91m'
+green_color='\033[92m'
+blue_color='\033[94m'
+reset_color='\033[0m'
+
+print_msg() {
+  msg=$1
+  msg_color=$blue_color
+  msg_type=
+  msg_type_color=
+  time_msg="in $3 ms"
+
+  case "$2" in
+  "0")
+    msg_type="success"
+    msg_type_color=$green_color
+    ;;
+  "1")
+    msg_type="error"
+    msg_type_color=$red_color
+    ;;
+  esac
+
+  printf "${msg_type_color}${msg_type} ${msg_color}${msg}${reset_color} ${time_msg}\n"
+}
+
+run_to_check() {
+  start_ms=$(date +%s%3N)
+
+  eval $1 >/dev/null 2>&1
+  exitCode="$?"
+
+  end_ms=$(date +%s%3N)
+  elapsed_ms=$((end_ms - start_ms))
+
+  if [ $exitCode = 0 ]; then
+    print_msg "$2" 0 $elapsed_ms
+  else
+    print_msg "$2" 1 $elapsed_ms
+    exit $exitCode
+  fi
+}
+
+run_to_check 'npm run lint' 'lint check'
+run_to_check 'npm run test' 'tests check'
+run_to_check 'npm run build' 'build'
+
+exit 0
