@@ -58,6 +58,7 @@ describe('Messages, error/warning', () => {
     const fc = new FieldCtrl('a', null, 2);
     fc.validation = {
       required: true,
+      validateOn: 'change',
     };
 
     fc.value = 0;
@@ -115,6 +116,10 @@ describe('Messages, error/warning', () => {
     expect(fc.validation).toStrictEqual({
       required: true,
     });
+    fc.validation = {
+      ...fc.validation,
+      validateOn: 'change',
+    };
 
     fc.value = 0;
     expect(fc.error).toBe(true);

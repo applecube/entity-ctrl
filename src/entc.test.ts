@@ -13,7 +13,7 @@ describe('entc', () => {
     const fc1 = entc.field();
     expect(fc1 instanceof FieldCtrl).toBe(true);
     expect(fc1.parent).toBe(null);
-    expect(fc1.field).toBe(undefined);
+    expect(fc1.field).toBe('standalone');
     expect(fc1.value).toBe(undefined);
 
     const fc2 = entc.field(0, 'field');
