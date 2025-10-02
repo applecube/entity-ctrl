@@ -70,6 +70,9 @@ export class EntityCtrl<VO extends object = AnyValues> {
     return [...this._fields.keys()];
   }
 
+  /**
+   * Gets fields with truthy `param`.
+   */
   protected _getFieldsIf(param: string): Field<VO>[] {
     const fields: Field<VO>[] = [];
     for (const fc of this._fields.values()) {

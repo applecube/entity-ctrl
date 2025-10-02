@@ -15,7 +15,6 @@ export default tseslint.config(
       sourceType: 'module',
       globals: {
         ...globals.es2024,
-        ...globals.browser,
       },
     },
     rules: {

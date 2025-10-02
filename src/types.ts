@@ -1,19 +1,32 @@
-import type { FieldCtrl } from './FieldCtrl.js';
-
-interface AugmentableRegistry {
-  entityKey: unknown;
-  validationEventType: 'touch' | 'change' | 'demand';
-  messageType: 'error' | 'warning' | 'success' | 'info';
-  fieldParam: 'value' | 'touched' | 'changed' | 'error' | 'warning' | 'messages';
+export interface ValidationEventTypes {
+  touch: true;
+  change: true;
+  demand: true;
 }
 
-export type EntityKey = AugmentableRegistry['entityKey'];
+export interface FieldMessageTypes {
+  error: true;
+  warning: true;
+  success: true;
+  info: true;
+}
 
-export type FieldMessageType = AugmentableRegistry['messageType'];
+export interface FieldParams<V = any> {
+  value: V;
+  touched: number;
+  changed: number;
+  error: boolean;
+  warning: boolean;
+  messages: FieldMessage[] | null;
+}
 
-export type ValidationEventType = AugmentableRegistry['validationEventType'];
+export type EntityKey = unknown;
 
-export type FieldParam = AugmentableRegistry['fieldParam'];
+export type FieldMessageType = keyof FieldMessageTypes;
+
+export type ValidationEventType = keyof ValidationEventTypes;
+
+export type FieldParam = keyof FieldParams;
 
 export type AnyValues = Record<string, any>;
 
@@ -34,12 +47,9 @@ export interface FieldMessage {
   type?: FieldMessageType;
 }
 
-export type FieldValidate<FC extends FieldCtrl<any, any> = FieldCtrl<any, any>> = (
-  fc: FC,
-) => boolean | Promise<boolean>;
+export type FieldValidate<FC = any> = (fc: FC) => boolean | Promise<boolean>;
 
-export interface FieldValidationRule<FC extends FieldCtrl<any, any> = FieldCtrl<any, any>>
-  extends FieldMessage {
+export interface FieldValidationRule<FC = any> extends FieldMessage {
   /**
    * `Rule` validate function. Can be async.
    *
@@ -65,13 +75,9 @@ export interface FieldValidationRule<FC extends FieldCtrl<any, any> = FieldCtrl<
   validateOn?: ValidationEventType;
 }
 
-export type FieldRequired<FC extends FieldCtrl<any, any> = FieldCtrl<any, any>> =
-  | boolean
-  | string
-  | FieldValidationRule<FC>;
+export type FieldRequired<FC = any> = boolean | string | FieldValidationRule<FC>;
 
-export interface FieldValidation<FC extends FieldCtrl<any, any> = FieldCtrl<any, any>>
-  extends ValidationOptions<FC> {
+export interface FieldValidation<FC = any> extends ValidationOptions<FC> {
   /**
    * Array of validation settings.
    * Each item is for specific message with its type and validate function.
@@ -90,7 +96,7 @@ export interface FieldValidation<FC extends FieldCtrl<any, any> = FieldCtrl<any,
   required?: FieldRequired<FC>;
 }
 
-export interface ValidationOptions<FC extends FieldCtrl<any, any> = FieldCtrl<any, any>> {
+export interface ValidationOptions<FC = any> {
   /**
    * Event on which validation rules including required will trigger.
    * Applies to all rules if there is no override in a rule.
@@ -105,3 +111,16 @@ export interface ValidationOptions<FC extends FieldCtrl<any, any> = FieldCtrl<an
    */
   requiredMessage?: string;
 }
+
+export type FieldListenerParam = FieldParam | 'any';
+
+export type FieldParamListener<FC = any, V = any> = (
+  fc: FC,
+  param: FieldListenerParam,
+  prev: V,
+) => void;
+
+export type FieldParamListenersInternal<FC = any, V = any> =
+  | Set<FieldParamListener<FC, V>>
+  | FieldParamListener<FC, V>
+  | null;

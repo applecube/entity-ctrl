@@ -10,6 +10,9 @@ import type {
   FieldValue,
   FieldParam,
   FieldRequired,
+  FieldParamListener,
+  FieldParamListenersInternal,
+  FieldListenerParam,
 } from './types.js';
 import { shallowEqual, everyTruthy } from './utils.js';
 
@@ -19,10 +22,6 @@ export const VALIDATION_DEFAULTS: Required<ValidationOptions> = {
     value !== undefined && value !== null && value !== '' && value !== 0,
   requiredMessage: 'Required field',
 };
-
-type ParamListener<V> = (current: V, prev: V) => void;
-
-type ParamListeners<V> = Set<ParamListener<V>> | ParamListener<V> | null;
 
 export class FieldCtrl<VO extends object = AnyValues, F extends Field<VO> = Field<VO>> {
   readonly field: F;
@@ -46,12 +45,13 @@ export class FieldCtrl<VO extends object = AnyValues, F extends Field<VO> = Fiel
   protected _errorOverride: boolean | null;
   protected _warningOverride: boolean | null;
 
-  protected _listeners_value: ParamListeners<FieldValue<VO, F>>;
-  protected _listeners_touched: ParamListeners<number>;
-  protected _listeners_changed: ParamListeners<number>;
-  protected _listeners_error: ParamListeners<boolean>;
-  protected _listeners_warning: ParamListeners<boolean>;
-  protected _listeners_messages: ParamListeners<FieldMessage[] | null>;
+  protected _listeners_any: FieldParamListenersInternal<this, never>;
+  protected _listeners_value: FieldParamListenersInternal<this, FieldValue<VO, F>>;
+  protected _listeners_touched: FieldParamListenersInternal<this, number>;
+  protected _listeners_changed: FieldParamListenersInternal<this, number>;
+  protected _listeners_error: FieldParamListenersInternal<this, boolean>;
+  protected _listeners_warning: FieldParamListenersInternal<this, boolean>;
+  protected _listeners_messages: FieldParamListenersInternal<this, FieldMessage[] | null>;
 
   constructor(field: F, parent?: EntityCtrl<VO> | null, defaultValue?: VO[F]) {
     this.field = field;
@@ -75,6 +75,7 @@ export class FieldCtrl<VO extends object = AnyValues, F extends Field<VO> = Fiel
     this._errorOverride = null;
     this._warningOverride = null;
 
+    this._listeners_any = null;
     this._listeners_value = null;
     this._listeners_touched = null;
     this._listeners_changed = null;
@@ -93,30 +94,54 @@ export class FieldCtrl<VO extends object = AnyValues, F extends Field<VO> = Fiel
   }
 
   set value(v: FieldValue<VO, F>) {
-    const prevValue = this._value;
-    const prevChanged = this._changed;
+    const {
+      _value: prevValue,
+      _changed: prevChanged,
+      _error: prevError,
+      _warning: prevWarning,
+      _messages: prevMessages,
+    } = this;
+
     this._value = v;
     this._changed++;
-    this.validate('change');
+    this._validate('change', true);
+
+    // dont want to create temporary objects
     this._triggerListeners('value', prevValue);
     this._triggerListeners('changed', prevChanged);
+    this._triggerListeners('error', prevError);
+    this._triggerListeners('warning', prevWarning);
+    this._triggerListeners('messages', prevMessages);
+    this._triggerListeners('any');
   }
 
   touch(value: FieldValue<VO, F>) {
-    const prevValue = this._value;
-    const prevTouched = this._touched;
-    const prevChanged = this._changed;
+    const {
+      _value: prevValue,
+      _touched: prevTouched,
+      _changed: prevChanged,
+      _error: prevError,
+      _warning: prevWarning,
+      _messages: prevMessages,
+    } = this;
+
     this._value = value;
     this._touched++;
     this._changed++;
-    this.validate('touch');
+    this._validate('touch', true);
+
+    // dont want to create temporary objects
     this._triggerListeners('value', prevValue);
     this._triggerListeners('touched', prevTouched);
     this._triggerListeners('changed', prevChanged);
+    this._triggerListeners('error', prevError);
+    this._triggerListeners('warning', prevWarning);
+    this._triggerListeners('messages', prevMessages);
+    this._triggerListeners('any');
   }
 
   /**
-   * Number of times field touched.
+   * Number of times field was touched.
    *
    * Every touch is change, but not every change is touch.
    */
@@ -131,7 +156,7 @@ export class FieldCtrl<VO extends object = AnyValues, F extends Field<VO> = Fiel
   }
 
   /**
-   * Number of times field changed.
+   * Number of times field was changed.
    */
   get changed() {
     return this._changed;
@@ -147,7 +172,7 @@ export class FieldCtrl<VO extends object = AnyValues, F extends Field<VO> = Fiel
 
   /**
    * `true` if there is at least one message with `type === 'error'`,
-   * or if `forceError` has been used.
+   * or if `errorOverride` has been used.
    */
   get error() {
     return this._error;
@@ -155,7 +180,7 @@ export class FieldCtrl<VO extends object = AnyValues, F extends Field<VO> = Fiel
 
   /**
    * `true` if there is at least one message with `type === 'warning'`,
-   * or if `forceWarning` has been used.
+   * or if `warningOverride` has been used.
    */
   get warning() {
     return this._warning;
@@ -234,7 +259,7 @@ export class FieldCtrl<VO extends object = AnyValues, F extends Field<VO> = Fiel
     this._updateMessages();
   }
 
-  protected _updateMessages(only?: 'onlyError' | 'onlyWarning'): void {
+  protected _updateMessages(only?: 'onlyError' | 'onlyWarning', skipListeners?: boolean): void {
     const {
       _error: prevError,
       _warning: prevWarning,
@@ -275,9 +300,14 @@ export class FieldCtrl<VO extends object = AnyValues, F extends Field<VO> = Fiel
       }
     }
 
-    this._triggerListeners('error', prevError);
-    this._triggerListeners('warning', prevWarning);
-    this._triggerListeners('messages', prevMessages);
+    if (!skipListeners) {
+      const errorChanged = this._triggerListeners('error', prevError);
+      const warningChanged = this._triggerListeners('warning', prevWarning);
+      const messagesChanged = this._triggerListeners('messages', prevMessages);
+      if (errorChanged || warningChanged || messagesChanged) {
+        this._triggerListeners('any');
+      }
+    }
   }
 
   // region Listeners
@@ -285,9 +315,12 @@ export class FieldCtrl<VO extends object = AnyValues, F extends Field<VO> = Fiel
   /**
    * Adds `listener` to `param` changes.
    */
-  addListener<P extends FieldParam>(param: P, listener: ParamListener<this[P]>): void {
+  addListener<P extends FieldListenerParam>(
+    param: P,
+    listener: FieldParamListener<this, (this & { any: never })[P]>,
+  ): void {
     const key = `_listeners_${param}` as '_listeners_changed';
-    const l = listener as ParamListener<number>;
+    const l = listener as FieldParamListener<this, number>;
     const ls = this[key];
 
     if (!ls) {
@@ -298,7 +331,7 @@ export class FieldCtrl<VO extends object = AnyValues, F extends Field<VO> = Fiel
       ls.add(l);
     } else {
       // if there is plain listener - create Set with old listener and new listener
-      const set = new Set<ParamListener<number>>();
+      const set = new Set<FieldParamListener<this, number>>();
       set.add(ls);
       set.add(l);
       this[key] = set;
@@ -310,9 +343,12 @@ export class FieldCtrl<VO extends object = AnyValues, F extends Field<VO> = Fiel
    *
    * Returns `true` if `listener` was registered for `param`.
    */
-  removeListener<P extends FieldParam>(param: P, listener: ParamListener<this[P]>): boolean {
+  removeListener<P extends FieldListenerParam>(
+    param: P,
+    listener: FieldParamListener<this, (this & { any: never })[P]>,
+  ): boolean {
     const key = `_listeners_${param}` as '_listeners_changed';
-    const l = listener as ParamListener<number>;
+    const l = listener as FieldParamListener<this, number>;
     const ls = this[key];
 
     // if no listeners - dont do anything
@@ -322,10 +358,7 @@ export class FieldCtrl<VO extends object = AnyValues, F extends Field<VO> = Fiel
     if (ls instanceof Set) {
       const deleted = ls.delete(l);
       if (deleted && ls.size < 2) {
-        this[key] = null;
-        for (const _l of ls) {
-          this[key] = _l;
-        }
+        this[key] = ls.keys().next().value || null;
       }
       return deleted;
     }
@@ -340,26 +373,36 @@ export class FieldCtrl<VO extends object = AnyValues, F extends Field<VO> = Fiel
   }
 
   /**
-   * Triggers param listeners if they exist and if `holdListeners` allows.
+   * Triggers param listeners if
+   * - param changed
+   * - listeners for that param exist
+   * - `holdListeners` allows
+   *
+   * Returns `true` if param changed or `'any'`
    */
-  protected _triggerListeners(param: FieldParam, prev: any): boolean {
-    const current = this[`_${param}`];
-    if (Object.is(current, prev)) return false;
+  protected _triggerListeners(param: FieldListenerParam, prev?: any): boolean {
+    if (param !== 'any') {
+      const current = this[`_${param}`];
+      if (Object.is(current, prev)) return false;
+    }
 
-    const paramListeners = this[`_listeners_${param}`] as ParamListeners<any> | null;
+    const paramListeners = this[`_listeners_${param}`] as FieldParamListenersInternal<
+      this,
+      any
+    > | null;
     if (!paramListeners) return true;
 
     const holdListeners = this.holdListeners;
     const holdParamListeners =
-      holdListeners && (holdListeners === true || holdListeners.includes(param));
+      holdListeners && (holdListeners === true || holdListeners.includes(param as FieldParam));
     if (holdParamListeners) return true;
 
     if (paramListeners instanceof Set) {
       for (const listener of paramListeners) {
-        listener(current, prev);
+        listener(this, param, prev);
       }
     } else {
-      paramListeners(current, prev);
+      paramListeners(this, param, prev);
     }
 
     return true;
@@ -448,7 +491,9 @@ export class FieldCtrl<VO extends object = AnyValues, F extends Field<VO> = Fiel
     this.clearValidated();
   }
 
-  protected _getValidationDefault<P extends keyof ValidationOptions>(param: P) {
+  protected _getValidationDefault<P extends keyof ValidationOptions>(
+    param: P,
+  ): NonNullable<ValidationOptions[P]> {
     return this.parent?.validationOptions?.[param] || VALIDATION_DEFAULTS[param];
   }
 
@@ -488,6 +533,13 @@ export class FieldCtrl<VO extends object = AnyValues, F extends Field<VO> = Fiel
    * catches error and considers it not passed (as if it returned `false`).
    */
   validate(eventType?: ValidationEventType): boolean | Promise<boolean> {
+    return this._validate(eventType);
+  }
+
+  protected _validate(
+    eventType?: ValidationEventType,
+    skipSyncListeners?: boolean,
+  ): boolean | Promise<boolean> {
     const validation = this._validation;
     if (!validation) return true;
 
@@ -579,7 +631,7 @@ export class FieldCtrl<VO extends object = AnyValues, F extends Field<VO> = Fiel
       const required = validation.required;
 
       const requiredRule =
-        typeof required === 'object' ? required : ({ type: 'error' } as FieldValidationRule);
+        typeof required === 'object' ? required : ({ type: 'error' } as FieldValidationRule<this>);
 
       if (typeof required !== 'object') {
         requiredRule.validate =
@@ -615,7 +667,7 @@ export class FieldCtrl<VO extends object = AnyValues, F extends Field<VO> = Fiel
       return Promise.all(results).then(processBools);
     }
 
-    if (needUpdate) this._updateMessages();
+    if (needUpdate) this._updateMessages(undefined, skipSyncListeners);
     return everyTruthy(results as boolean[]);
   }
 }
