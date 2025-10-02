@@ -298,20 +298,21 @@ export class EntityCtrl<VO extends object = AnyValues> {
   }
 
   /**
-   * Sets `param` for each field.
+   * Uses `callback` for each key of `params` as field.
+   * Pass two args to `callback` - FieldCtrl and params value for field.
    *
    * Creates `FieldCtrl` if there is none.
    * If `strict` is `true` - does not create and sets only to existing ones.
    */
-  protected _setFieldsParam(
-    param: string,
+  protected _execForEachFieldKey(
     params: Partial<Record<Field<VO>, any>>,
+    callback: (fc: any, value: any) => any,
     strict?: boolean,
   ): this {
     for (const field in params) {
       const fc = this.field(field, strict);
       if (!fc) continue;
-      fc[param as 'value'] = params[field];
+      callback(fc, params[field]);
     }
     return this;
   }
@@ -323,7 +324,7 @@ export class EntityCtrl<VO extends object = AnyValues> {
    * If `strict` is `true` - does not create and sets only to existing ones.
    */
   setValues(values: Partial<VO>, strict?: boolean): this {
-    return this._setFieldsParam('value', values, strict);
+    return this._execForEachFieldKey(values, (fc, value) => (fc.value = value), strict);
   }
 
   /**
@@ -333,7 +334,11 @@ export class EntityCtrl<VO extends object = AnyValues> {
    * If `strict` is `true` - does not create and sets only to existing ones.
    */
   setDefaultValues(defaultValues: Partial<VO>, strict?: boolean): this {
-    return this._setFieldsParam('defaultValue', defaultValues, strict);
+    return this._execForEachFieldKey(
+      defaultValues,
+      (fc, value) => (fc.defaultValue = value),
+      strict,
+    );
   }
 
   // region Validate
