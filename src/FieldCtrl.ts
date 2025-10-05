@@ -25,7 +25,7 @@ export const VALIDATION_DEFAULTS: Required<ValidationOptions> = {
 
 export class FieldCtrl<VO extends object = AnyValues, F extends Field<VO> = Field<VO>> {
   readonly field: F;
-  readonly parent?: EntityCtrl<VO> | null;
+  readonly parent: EntityCtrl<VO> | null;
 
   defaultValue: FieldValue<VO, F>;
   holdValidation: boolean | ValidationEventType[];
@@ -55,7 +55,7 @@ export class FieldCtrl<VO extends object = AnyValues, F extends Field<VO> = Fiel
 
   constructor(field: F, parent?: EntityCtrl<VO> | null, defaultValue?: VO[F]) {
     this.field = field;
-    this.parent = parent;
+    this.parent = parent || null;
 
     this.defaultValue = defaultValue;
     this.holdValidation = false;
@@ -442,9 +442,7 @@ export class FieldCtrl<VO extends object = AnyValues, F extends Field<VO> = Fiel
    * Clears everything except validation settings and listeners.
    */
   reset() {
-    const prevValue = this._value;
-    const prevTouched = this._touched;
-    const prevChanged = this._changed;
+    const { _value: prevValue, _touched: prevTouched, _changed: prevChanged } = this;
 
     this._value = this.defaultValue;
     this._touched = 0;

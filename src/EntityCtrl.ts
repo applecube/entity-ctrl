@@ -35,13 +35,11 @@ export class EntityCtrl<VO extends object = AnyValues> {
   // region Static
 
   /**
-   * Get form instance from internal store by id.
-   * Generic class type because of typescript static method issue.
-   * https://github.com/microsoft/TypeScript/issues/5863#issuecomment-169173943
+   * Gets entity from cache by key.
    */
-  static get<T extends EntityCtrl<any> = EntityCtrl<any>>(key: EntityKey): T | undefined {
+  static get<VO extends object = AnyValues>(key: EntityKey): EntityCtrl<VO> | undefined {
     if (!entityCache) return;
-    return entityCache.get(key) as T | undefined;
+    return entityCache.get(key) as EntityCtrl<VO> | undefined;
   }
 
   /**
